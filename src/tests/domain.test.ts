@@ -5,6 +5,7 @@ import * as rules from "@domain/services/GameRules";
 import { buildNightOrder } from "@domain/services/NightOrder";
 import { seededRandom } from "@domain/services/Random";
 import { pickBluffs, pickDecoys, randomSelection } from "@domain/services/SetupGenerator";
+import { disablesAbility, makeReminder, nextExpiry } from "@domain/services/Reminders";
 import { seatSecret } from "@domain/services/TableView";
 import { allowedDistributions, baseDistribution, validateSelection } from "@domain/services/SetupRules";
 
@@ -182,5 +183,46 @@ describe("lo que ve cada jugador", () => {
     expect(shown.team).toBe("townsfolk");
     expect(bag.some((c) => c.id === shown.id)).toBe(false);
     expect(seatSecret(seat("drunk", shown.id), map).characterId).toBe(shown.id);
+  });
+});
+
+describe("recordatorios", () => {
+  const ids = ["washerwoman", "monk", "empath", "chef", "butler", "poisoner", "imp"];
+
+  it("saben cuándo se quitan según quién los pone", () => {
+    expect(makeReminder("r", "poisoner", "Envenenado").until).toBe("dusk");
+    expect(makeReminder("r", "monk", "A salvo").until).toBe("dawn");
+    expect(makeReminder("r", "imp", "Muerto").until).toBe("dawn");
+    expect(makeReminder("r", "custom", "Muerto esta noche").until).toBe("dawn");
+    expect(makeReminder("r", "washerwoman", "Aldeano").until).toBeUndefined();
+    expect(makeReminder("r", "pukka", "Envenenado").until).toBeUndefined();
+  });
+
+  it("al amanecer se van los de la noche y al anochecer los del día", () => {
+    let g = game(ids, { phase: { kind: "night", number: 1 } });
+    g = rules.addReminder(g, "p2", makeReminder("a", "monk", "A salvo"));
+    g = rules.addReminder(g, "p2", makeReminder("b", "poisoner", "Envenenado"));
+    g = rules.addReminder(g, "p0", makeReminder("c", "washerwoman", "Aldeano"));
+    g = rules.startDay(g);
+    expect(g.players[2].reminders.map((r) => r.label)).toEqual(["Envenenado"]);
+    expect(g.log.at(-1)?.text).toContain("A salvo");
+    g = rules.startNight(g);
+    expect(g.players[2].reminders).toEqual([]);
+    expect(g.players[0].reminders.map((r) => r.label)).toEqual(["Aldeano"]);
+  });
+
+  it("el Narrador puede cambiar cuándo se quita uno", () => {
+    let g = rules.addReminder(game(ids), "p0", makeReminder("c", "custom", "Usado"));
+    expect(nextExpiry(undefined)).toBe("dawn");
+    g = rules.setReminderExpiry(g, "p0", "c", "dusk");
+    expect(g.players[0].reminders[0].until).toBe("dusk");
+    g = rules.setReminderExpiry(g, "p0", "c", undefined);
+    expect("until" in g.players[0].reminders[0]).toBe(false);
+  });
+
+  it("detecta los que dejan sin habilidad", () => {
+    expect(disablesAbility(makeReminder("r", "poisoner", "Envenenado"))).toBe(true);
+    expect(disablesAbility(makeReminder("r", "drunk", "Es el Borracho"))).toBe(true);
+    expect(disablesAbility(makeReminder("r", "monk", "A salvo"))).toBe(false);
   });
 });

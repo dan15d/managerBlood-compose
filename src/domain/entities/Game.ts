@@ -3,11 +3,16 @@ import type { Alignment } from "./Character";
 export type GameMode = "manual" | "ai";
 export type GameStatus = "in_progress" | "finished";
 
+/** Cuándo se quita solo un recordatorio: al empezar el día o al empezar la noche siguiente. */
+export type ReminderExpiry = "dawn" | "dusk";
+
 export interface ReminderToken {
   id: string;
   /** Personaje que pone el recordatorio (p. ej. "poisoner"), o "custom". */
   sourceCharacterId: string;
   label: string;
+  /** Si falta, se queda hasta que el Narrador lo quite. */
+  until?: ReminderExpiry;
 }
 
 export interface Player {

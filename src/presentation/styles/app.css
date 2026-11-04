@@ -2188,3 +2188,43 @@ button.token {
     position: static;
   }
 }
+
+/* ---------- Aviso con botón (deshacer) y recordatorios con caducidad ---------- */
+
+.toast--action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toast--action > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast--action .btn {
+  flex: 0 0 auto;
+}
+
+.chip--reminder .chip__until {
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.7;
+}
+
+.chip--reminder .chip__until .lucide {
+  width: 14px;
+  height: 14px;
+}
+
+.undo-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.undo-row > span {
+  flex: 1;
+  min-width: 0;
+}

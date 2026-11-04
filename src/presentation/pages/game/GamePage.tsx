@@ -2,6 +2,7 @@ import type { Character } from "@domain/entities/Character";
 import type { Game } from "@domain/entities/Game";
 import * as rules from "@domain/services/GameRules";
 import { buildNightOrder } from "@domain/services/NightOrder";
+import { EXPIRY_LABEL, makeReminder } from "@domain/services/Reminders";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { errorMessage, useApp } from "../../app/AppContext";
@@ -12,9 +13,16 @@ import { DayPanel } from "./DayPanel";
 import { Grimoire } from "./Grimoire";
 import { NightPanel } from "./NightPanel";
 import { PlayerSheet } from "./PlayerSheet";
-import { ArrowLeft, Eye, EyeOff, Moon, ScrollText, Smartphone, Sparkles, Sun } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Moon, ScrollText, Smartphone, Sparkles, Sun, Undo2 } from "lucide-react";
 
 type Tab = "phase" | "ai" | "log";
+
+interface UndoEntry {
+  before: Game;
+  text: string;
+}
+
+const UNDO_LIMIT = 30;
 
 /** Modo «toca una ficha»: poner un recordatorio o nominar sin abrir la hoja del jugador. */
 type Pick =
@@ -37,9 +45,14 @@ export function GamePage() {
   const characters = app.catalog.map();
   const saving = useRef(Promise.resolve());
   const gameRef = useRef<Game | null>(null);
+  // Lo que había justo antes de cada suceso del registro (matar, ejecutar, amanecer…), para deshacerlo.
+  const undoStack = useRef<UndoEntry[]>([]);
+  const [undoable, setUndoable] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
+    undoStack.current = [];
+    setUndoable(null);
     app.loadGame
       .execute(id)
       .then(async (g) => {
@@ -56,6 +69,26 @@ export function GamePage() {
       });
   }, [app, id, navigate, toast]);
 
+  const apply = useCallback(
+    (next: Game) => {
+      gameRef.current = next;
+      setGame(next);
+      saving.current = saving.current.then(() => app.saveGame.execute(next)).catch((e) => toast(errorMessage(e), "error"));
+    },
+    [app, toast],
+  );
+
+  /** Vuelve a como estaba la partida antes del último suceso, sin perder el paso de la noche si sigue la misma. */
+  const undo = useCallback(() => {
+    const entry = undoStack.current.pop();
+    const current = gameRef.current;
+    if (!entry || !current) return;
+    const samePhase = current.phase.kind === entry.before.phase.kind && current.phase.number === entry.before.phase.number;
+    apply({ ...entry.before, nightStep: samePhase ? current.nightStep : entry.before.nightStep, updatedAt: new Date().toISOString() });
+    setUndoable(undoStack.current.at(-1)?.text ?? null);
+    toast(`Deshecho: ${entry.text}`);
+  }, [apply, toast]);
+
   /** Aplica una regla del dominio y guarda (en cola, para no pisar guardados anteriores). */
   const change = useCallback(
     (mutate: (g: Game) => Game) => {
@@ -69,11 +102,16 @@ export function GamePage() {
         return;
       }
       if (next === current) return;
-      gameRef.current = next;
-      setGame(next);
-      saving.current = saving.current.then(() => app.saveGame.execute(next)).catch((e) => toast(errorMessage(e), "error"));
+      apply(next);
+      // Solo lo que queda en el registro se puede deshacer: un toque en falso al matar o ejecutar.
+      if (next.log.length > current.log.length) {
+        const text = next.log[next.log.length - 1].text;
+        undoStack.current = [...undoStack.current.slice(-(UNDO_LIMIT - 1)), { before: current, text }];
+        setUndoable(text);
+        toast(text, "info", { label: "Deshacer", onClick: undo });
+      }
     },
-    [app, toast],
+    [apply, toast, undo],
   );
 
   const steps = useMemo(() => (game ? buildNightOrder(game, characters) : []), [game, characters]);
@@ -96,8 +134,9 @@ export function GamePage() {
   const tapPlayer = (pid: string) => {
     if (!pick) return setSelected(pid);
     if (pick.kind === "reminder") {
-      change((g) => rules.addReminder(g, pid, { id: app.newId(), sourceCharacterId: pick.sourceId, label: pick.label }));
-      toast(`«${pick.label}» en ${name(pid)}.`);
+      const reminder = makeReminder(app.newId(), pick.sourceId, pick.label);
+      change((g) => rules.addReminder(g, pid, reminder));
+      toast(`«${pick.label}» en ${name(pid)}${reminder.until ? ` (${EXPIRY_LABEL[reminder.until]})` : ""}.`);
       return setPick(null);
     }
     if (pick.kind === "nominator") {
@@ -241,6 +280,14 @@ export function GamePage() {
                 />
               ))}
             {tab === "ai" && <AiPanel game={game} />}
+            {tab === "log" && undoable && (
+              <div className="undo-row">
+                <span className="small muted">Último suceso: {undoable}</span>
+                <button className="btn btn--small" onClick={undo}>
+                  <Undo2 /> Deshacer
+                </button>
+              </div>
+            )}
             {tab === "log" && (
               <ul className="log">
                 {[...game.log].reverse().map((l, i) => (

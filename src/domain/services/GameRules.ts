@@ -1,6 +1,7 @@
 import type { Alignment, Character } from "../entities/Character";
-import type { Game, Nomination, Phase, Player, ReminderToken } from "../entities/Game";
+import type { Game, Nomination, Phase, Player, ReminderExpiry, ReminderToken } from "../entities/Game";
 import { RuleViolation } from "../errors";
+import { expireReminders } from "./Reminders";
 
 // Reglas del Grimorio: funciones puras que devuelven una partida nueva. No guardan nada
 // ni conocen la interfaz; los casos de uso se encargan de persistir el resultado.
@@ -83,6 +84,18 @@ export const addReminder = (game: Game, playerId: string, reminder: ReminderToke
 export const removeReminder = (game: Game, playerId: string, reminderId: string): Game =>
   touch(updatePlayer(game, playerId, (p) => ({ ...p, reminders: p.reminders.filter((r) => r.id !== reminderId) })));
 
+export const setReminderExpiry = (game: Game, playerId: string, reminderId: string, until: ReminderExpiry | undefined): Game =>
+  touch(
+    updatePlayer(game, playerId, (p) => ({
+      ...p,
+      reminders: p.reminders.map((r) => {
+        if (r.id !== reminderId) return r;
+        const { until: _old, ...rest } = r;
+        return until ? { ...rest, until } : rest;
+      }),
+    })),
+  );
+
 /** Cambia el sitio de dos jugadores (por si se sientan distinto a como se apuntaron). */
 export function swapSeats(game: Game, a: string, b: string): Game {
   const pa = findPlayer(game, a);
@@ -96,16 +109,28 @@ export function swapSeats(game: Game, a: string, b: string): Game {
 
 // ---------- Fases ----------
 
+/** Quita los recordatorios que caducan en este momento y lo cuenta en el registro. */
+function expire(game: Game, at: ReminderExpiry, text: string): Game {
+  const gone: string[] = [];
+  const players = game.players.map((p) => {
+    const { expired, kept } = expireReminders(p.reminders, at);
+    if (!expired.length) return p;
+    gone.push(`${p.name}: ${expired.map((r) => r.label).join(", ")}`);
+    return { ...p, reminders: kept };
+  });
+  return touch({ ...game, players }, gone.length ? `${text} Se retiran recordatorios (${gone.join("; ")}).` : text);
+}
+
 export function startDay(game: Game): Game {
   if (game.phase.kind !== "night") throw new RuleViolation("Ya es de día.");
   const next = { ...game, phase: { kind: "day", number: game.phase.number } as Phase, nominations: [], executedToday: undefined };
-  return touch(next, "Amanece.");
+  return expire(next, "dawn", "Amanece.");
 }
 
 export function startNight(game: Game): Game {
   if (game.phase.kind !== "day") throw new RuleViolation("Ya es de noche.");
   const next = { ...game, phase: { kind: "night", number: game.phase.number + 1 } as Phase, nightStep: 0 };
-  return touch(next, "Cae la noche.");
+  return expire(next, "dusk", "Cae la noche.");
 }
 
 export const setNightStep = (game: Game, step: number): Game => ({ ...game, nightStep: Math.max(0, step) });

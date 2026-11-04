@@ -2,6 +2,7 @@ import type { Character } from "@domain/entities/Character";
 import type { Game } from "@domain/entities/Game";
 import * as rules from "@domain/services/GameRules";
 import type { NightStep } from "@domain/services/NightOrder";
+import { disablesAbility } from "@domain/services/Reminders";
 import { useState } from "react";
 import { CharacterPicker } from "../../components/CharacterPicker";
 import { Sheet } from "../../components/Sheet";
@@ -28,8 +29,6 @@ interface Card {
   characters: Character[];
 }
 
-/** Recordatorios que dejan sin habilidad: hay que avisar al Narrador para que dé información falsa. */
-const DISABLING = /envenen|borrach|sin habilidad|loc[oa]|enloquec/i;
 
 /** Icono del paso: la ficha del personaje o el de la hoja de noche (crepúsculo, Esbirros…). */
 function StepIcon({ step, size }: { step: NightStep; size: number }) {
@@ -48,7 +47,7 @@ export function NightPanel({ game, steps, characters, onChange, onOpenPlayer, on
   const player = (id: string) => game.players.find((p) => p.id === id)!;
   const last = index === steps.length - 1;
   // Jugadores de este paso con un recordatorio que les quita la habilidad (envenenado, borracho…).
-  const disabled = step.playerIds.map(player).filter((p) => p.reminders.some((r) => DISABLING.test(r.label)));
+  const disabled = step.playerIds.map(player).filter((p) => p.reminders.some((r) => disablesAbility(r)));
 
   return (
     <div>
@@ -86,7 +85,7 @@ export function NightPanel({ game, steps, characters, onChange, onOpenPlayer, on
                     <span className="chips">
                       {p.shownCharacterId && <span className="chip chip--static chip--reminder chip--tiny">Cree ser {characters.get(p.shownCharacterId)?.name}</span>}
                       {p.reminders.map((r) => (
-                        <span key={r.id} className={`chip chip--static chip--reminder chip--tiny ${DISABLING.test(r.label) ? "chip--danger" : ""}`}>
+                        <span key={r.id} className={`chip chip--static chip--reminder chip--tiny ${disablesAbility(r) ? "chip--danger" : ""}`}>
                           {r.label}
                         </span>
                       ))}
@@ -99,7 +98,7 @@ export function NightPanel({ game, steps, characters, onChange, onOpenPlayer, on
         )}
         {disabled.length > 0 && (
           <div className="alert alert--warning small">
-            <TriangleAlert /> {disabled.map((p) => `${p.name} (${p.reminders.filter((r) => DISABLING.test(r.label)).map((r) => r.label.toLowerCase()).join(", ")})`).join("; ")}
+            <TriangleAlert /> {disabled.map((p) => `${p.name} (${p.reminders.filter((r) => disablesAbility(r)).map((r) => r.label.toLowerCase()).join(", ")})`).join("; ")}
             : sin habilidad esta noche. Despiértalo igual y dale información falsa si te conviene.
           </div>
         )}

@@ -11,7 +11,13 @@ interface AppContextValue {
   refreshRole(): Promise<void>;
   settings: AppSettings;
   updateSettings(settings: AppSettings): void;
-  toast(message: string, kind?: "info" | "error"): void;
+  toast(message: string, kind?: "info" | "error", action?: ToastAction): void;
+}
+
+/** Botón dentro del aviso (p. ej. «Deshacer»). El aviso dura más para que dé tiempo a tocarlo. */
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
 }
 
 const Ctx = createContext<AppContextValue | null>(null);
@@ -20,6 +26,7 @@ interface Toast {
   id: number;
   message: string;
   kind: "info" | "error";
+  action?: ToastAction;
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -45,10 +52,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSettings(next);
   }, []);
 
-  const toast = useCallback((message: string, kind: "info" | "error" = "info") => {
+  const toast = useCallback((message: string, kind: "info" | "error" = "info", action?: ToastAction) => {
     const id = Date.now() + Math.random();
-    setToasts((t) => [...t, { id, message, kind }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === "error" ? 6000 : 3000);
+    // Un aviso con botón sustituye al anterior con botón: solo se puede deshacer lo último.
+    setToasts((t) => [...t.filter((x) => !(action && x.action)), { id, message, kind, action }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === "error" || action ? 6000 : 3000);
   }, []);
 
   const value = useMemo(
@@ -61,8 +69,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`toast toast--${t.kind}`}>
-            {t.message}
+          <div key={t.id} className={`toast toast--${t.kind} ${t.action ? "toast--action" : ""}`}>
+            <span>{t.message}</span>
+            {t.action && (
+              <button
+                type="button"
+                className="btn btn--small btn--gold"
+                onClick={() => {
+                  setToasts((list) => list.filter((x) => x.id !== t.id));
+                  t.action!.onClick();
+                }}
+              >
+                {t.action.label}
+              </button>
+            )}
           </div>
         ))}
       </div>

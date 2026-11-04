@@ -2,6 +2,7 @@ import type { Character } from "@domain/entities/Character";
 import { TEAM_LABEL } from "@domain/entities/Character";
 import type { Game, Player } from "@domain/entities/Game";
 import * as rules from "@domain/services/GameRules";
+import { EXPIRY_LABEL, GENERIC_REMINDERS, makeReminder, nextExpiry } from "@domain/services/Reminders";
 import { DECOYS } from "@domain/services/SetupRules";
 import { seatSecret } from "@domain/services/TableView";
 import { useState } from "react";
@@ -9,9 +10,7 @@ import { CharacterPicker } from "../../components/CharacterPicker";
 import { Sheet } from "../../components/Sheet";
 import { ShowCard } from "../../components/ShowCard";
 import { Token } from "../../components/Token";
-import { ArrowLeft, Eye, HeartPulse, Skull, Smartphone, VenetianMask } from "lucide-react";
-
-const GENERIC_REMINDERS = ["Envenenado", "Borracho", "Protegido", "Muerto esta noche", "Sin habilidad", "Usado"];
+import { ArrowLeft, Eye, HeartPulse, Moon, Skull, Smartphone, Sun, VenetianMask } from "lucide-react";
 // Primero los recordatorios del Mal (Envenenado, Muerto…), que son los que más se ponen.
 const TEAM_ORDER = ["demon", "minion", "townsfolk", "outsider", "traveller", "fabled", "loric"];
 
@@ -45,7 +44,7 @@ export function PlayerSheet({ game, player, characters, scriptCharacters, newId,
     .sort((a, b) => TEAM_ORDER.indexOf(a.team) - TEAM_ORDER.indexOf(b.team));
 
   const add = (sourceCharacterId: string, label: string) =>
-    onChange((g) => rules.addReminder(g, player.id, { id: newId(), sourceCharacterId, label }));
+    onChange((g) => rules.addReminder(g, player.id, makeReminder(newId(), sourceCharacterId, label)));
 
   const title = (
     <>
@@ -165,16 +164,30 @@ export function PlayerSheet({ game, player, characters, scriptCharacters, newId,
 
           <div className="section-title">Recordatorios</div>
           {player.reminders.length ? (
-            <div className="chips">
-              {player.reminders.map((r) => (
-                <span key={r.id} className="chip chip--static chip--reminder">
-                  {r.label}
-                  <button aria-label={`Quitar ${r.label}`} onClick={() => onChange((g) => rules.removeReminder(g, player.id, r.id))}>
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
+            <>
+              <div className="chips">
+                {player.reminders.map((r) => (
+                  <span key={r.id} className="chip chip--static chip--reminder">
+                    <button
+                      type="button"
+                      style={{ padding: 0, font: "inherit", display: "inline-flex", alignItems: "center", gap: 5 }}
+                      title={r.until ? `${r.label}: ${EXPIRY_LABEL[r.until]}. Toca para cambiarlo.` : `${r.label}: se queda hasta que lo quites. Toca para cambiarlo.`}
+                      aria-label={`${r.label}, ${r.until ? EXPIRY_LABEL[r.until] : "se queda"}. Cambiar cuándo se quita`}
+                      onClick={() => onChange((g) => rules.setReminderExpiry(g, player.id, r.id, nextExpiry(r.until)))}
+                    >
+                      {r.label}
+                      {r.until && <span className="chip__until">{r.until === "dawn" ? <Sun /> : <Moon />}</span>}
+                    </button>
+                    <button aria-label={`Quitar ${r.label}`} onClick={() => onChange((g) => rules.removeReminder(g, player.id, r.id))}>
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <p className="muted small" style={{ margin: "6px 0 0" }}>
+                <Sun /> se quita al amanecer · <Moon /> al anochecer. Toca el recordatorio para cambiarlo.
+              </p>
+            </>
           ) : (
             <p className="muted small">Ninguno. Añade uno tocándolo abajo.</p>
           )}
