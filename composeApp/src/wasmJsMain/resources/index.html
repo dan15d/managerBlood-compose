@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#140e1b" />
+  <title>El Grimorio</title>
+  <link rel="icon" type="image/png" href="favicon.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <style>
+    html, body { margin: 0; height: 100%; background: #140e1b; overflow: hidden; }
+    #carga { position: fixed; inset: 0; display: grid; place-items: center; color: #b2a5bf;
+      font: 16px Georgia, serif; background: linear-gradient(180deg, #1d1230 0%, #140e1b 55%, #0f0a15 100%); }
+  </style>
+</head>
+<body>
+  <div id="carga">Abriendo el Grimorio…</div>
+  <script>
+    // Quita el aviso de carga en cuanto Compose pinta su lienzo.
+    new MutationObserver((_, obs) => {
+      if (document.querySelector("canvas")) { document.getElementById("carga")?.remove(); obs.disconnect(); }
+    }).observe(document.body, { childList: true, subtree: true });
+  </script>
+  <script src="grimorio.js"></script>
+</body>
+</html>

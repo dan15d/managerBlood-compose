@@ -5,3 +5,12 @@ dist
 *.log
 research/
 tsconfig.tsbuildinfo
+
+# Compose Multiplatform
+.gradle/
+.kotlin/
+build/
+local.properties
+*.iml
+.idea/
+kotlin-js-store/
